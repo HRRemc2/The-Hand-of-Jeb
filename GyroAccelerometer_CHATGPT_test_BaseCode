@@ -1,89 +1,121 @@
 #include <Wire.h>
 
-// MPU6050 I2C address (default is 0x68)
-const int MPU_ADDRESS = 0x68;
+const int MPU_ADDR = 0x68;
 
-// Raw sensor data variables
-int16_t accelX, accelY, accelZ;
-int16_t gyroX, gyroY, gyroZ;
-int16_t temperatureRaw;
+// raw data
+int16_t ax, ay, az;
+int16_t gx, gy, gz;
+int16_t tempRaw;
+
+// converted values
+float ax_mps2, ay_mps2, az_mps2;
+float gx_dps, gy_dps, gz_dps;
+float tempC, tempF;
+
+// crude velocity estimate (VERY noisy)
+float vx = 0, vy = 0, vz = 0;
+unsigned long lastTime;
 
 void setup() {
   Serial.begin(115200);
-  delay(2000);
+  delay(1000);
 
-  Serial.println("=== MPU6050 RAW I2C START ===");
+  Wire.begin(21, 22);
+  Wire.setClock(100000);
 
-  // Start I2C communication
-  Wire.begin();
-  Wire.setClock(100000); // stable slow I2C for reliability
-
-  // Wake up MPU6050 (it starts in sleep mode by default)
-  Wire.beginTransmission(MPU_ADDRESS);
-  Wire.write(0x6B);  // Power management register
-  Wire.write(0x00);  // Set to 0 = wake up
+  // wake MPU
+  Wire.beginTransmission(MPU_ADDR);
+  Wire.write(0x6B);
+  Wire.write(0x00);
   Wire.endTransmission();
 
-  Serial.println("MPU6050 initialized (wake up sent)");
-  Serial.println("-----------------------------------");
+  lastTime = millis();
+
+  Serial.println("MPU6050 READY");
 }
 
 void loop() {
-  // Tell MPU6050 we want to read from ACCEL_XOUT_H
-  Wire.beginTransmission(MPU_ADDRESS);
+
+  // time step
+  float dt = (millis() - lastTime) / 1000.0;
+  lastTime = millis();
+
+  // read data
+  Wire.beginTransmission(MPU_ADDR);
   Wire.write(0x3B);
   Wire.endTransmission(false);
 
-  // Request 14 bytes (accel + temp + gyro)
-  Wire.requestFrom(MPU_ADDRESS, 14);
+  Wire.requestFrom(MPU_ADDR, 14);
 
-  // Read accelerometer values
-  accelX = Wire.read() << 8 | Wire.read();
-  accelY = Wire.read() << 8 | Wire.read();
-  accelZ = Wire.read() << 8 | Wire.read();
+  ax = Wire.read() << 8 | Wire.read();
+  ay = Wire.read() << 8 | Wire.read();
+  az = Wire.read() << 8 | Wire.read();
 
-  // Read temperature
-  temperatureRaw = Wire.read() << 8 | Wire.read();
+  tempRaw = Wire.read() << 8 | Wire.read();
 
-  // Read gyroscope values
-  gyroX = Wire.read() << 8 | Wire.read();
-  gyroY = Wire.read() << 8 | Wire.read();
-  gyroZ = Wire.read() << 8 | Wire.read();
+  gx = Wire.read() << 8 | Wire.read();
+  gy = Wire.read() << 8 | Wire.read();
+  gz = Wire.read() << 8 | Wire.read();
 
-  // Convert temperature to Celsius
-  float temperatureC = (temperatureRaw / 340.0) + 36.53;
+  // =========================
+  // CONVERSIONS
+  // =========================
 
-  // Convert accel to "g"
-  float accelX_g = accelX / 16384.0;
-  float accelY_g = accelY / 16384.0;
-  float accelZ_g = accelZ / 16384.0;
+  // acceleration (m/s²)
+  ax_mps2 = ax / 16384.0 * 9.80665;
+  ay_mps2 = ay / 16384.0 * 9.80665;
+  az_mps2 = az / 16384.0 * 9.80665;
 
-  // Convert gyro to deg/sec
-  float gyroX_dps = gyroX / 131.0;
-  float gyroY_dps = gyroY / 131.0;
-  float gyroZ_dps = gyroZ / 131.0;
+  // gyro (deg/s)
+  gx_dps = gx / 131.0;
+  gy_dps = gy / 131.0;
+  gz_dps = gz / 131.0;
 
-  // Print readable output
-  Serial.println("===== MPU6050 DATA =====");
+  // temperature
+  tempC = (tempRaw / 340.0) + 36.53;
+  tempF = (tempC * 9.0 / 5.0) + 32.0;
 
-  Serial.print("Accel (g)  X: ");
-  Serial.print(accelX_g);
-  Serial.print("  Y: ");
-  Serial.print(accelY_g);
-  Serial.print("  Z: ");
-  Serial.println(accelZ_g);
+  // =========================
+  // VERY BASIC VELOCITY ESTIMATE (NO FILTER)
+  // =========================
+  vx += ax_mps2 * dt;
+  vy += ay_mps2 * dt;
+  vz += az_mps2 * dt;
 
-  Serial.print("Gyro (deg/s) X: ");
-  Serial.print(gyroX_dps);
-  Serial.print("  Y: ");
-  Serial.print(gyroY_dps);
-  Serial.print("  Z: ");
-  Serial.println(gyroZ_dps);
+  // =========================
+  // OUTPUT
+  // =========================
 
-  Serial.print("Temp (C): ");
-  Serial.println(temperatureC);
+  Serial.println("----- MPU6050 -----");
 
-  Serial.println("------------------------\n");
+  Serial.print("Accel (m/s²): X=");
+  Serial.print(ax_mps2);
+  Serial.print(" Y=");
+  Serial.print(ay_mps2);
+  Serial.print(" Z=");
+  Serial.println(az_mps2);
 
-  delay(500);
+  Serial.print("Gyro (deg/s): X=");
+  Serial.print(gx_dps);
+  Serial.print(" Y=");
+  Serial.print(gy_dps);
+  Serial.print(" Z=");
+  Serial.println(gz_dps);
+
+  Serial.print("Velocity (m/s EST): X=");
+  Serial.print(vx);
+  Serial.print(" Y=");
+  Serial.print(vy);
+  Serial.print(" Z=");
+  Serial.println(vz);
+
+  Serial.print("Temp: ");
+  Serial.print(tempC);
+  Serial.print(" °C / ");
+  Serial.print(tempF);
+  Serial.println(" °F");
+
+  Serial.println();
+
+  delay(200);
 }
