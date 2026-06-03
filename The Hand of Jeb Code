@@ -1,5 +1,5 @@
 /*
-The Hand of Jeb V0.1.1
+The Hand of Jeb V0.2.0
 
 Basic integration of flight computer components Part 1 of 2
   -GPS
@@ -8,7 +8,7 @@ Basic integration of flight computer components Part 1 of 2
 */
 
 #include <TinyGPS++.h>
-#include <SoftwareSerial.h>
+
 #include <Wire.h>
 
 const int MPU_ADDR = 0x68;
@@ -19,7 +19,7 @@ HardwareSerial gpsSerial(1);
 
 //gps values
 double latGPS = 0.0;
-double lonGPS = 0.0;
+double lngGPS = 0.0;
 double altGPS = 0.0;
 
 //gyro values
@@ -60,26 +60,52 @@ void setup() {
 
 void loop() {
   
-  GPS_loop(latGPS, lonGPS, altGPS);
+  GPS_loop(latGPS, lngGPS, altGPS);
   Gyro_loop(ax_mps2, ay_mps2, az_mps2, gx_dps, gy_dps, gz_dps, tempC, tempF);
+
+  Serial.println("GPS: ");
+  Serial.print(latGPS);
+  Serial.print(", ");
+  Serial.print(lngGPS);
+  Serial.print(", ");
+  Serial.print(altGPS);
+
+  Serial.println("Gyro: ");
+  Serial.print(ax_mps2);
+  Serial.print(", ");
+  Serial.print(ay_mps2);
+  Serial.print(", ");
+  Serial.print(az_mps2);
+  Serial.print(", ");
+  Serial.print(gx_dps);
+  Serial.print(", ");
+  Serial.print(gy_dps);
+  Serial.print(", ");
+  Serial.println(gz_dps);
+  Serial.print("Temp(C, F): ");
+  Serial.print(tempC);
+  Serial.print(", ");
+  Serial.print(tempF);
+
+
 
 
 
 }
 
-void GPS_loop(double &latGPS, double &lonGPS, double &altGPS){
-  while (gpsSerial.avaliable() > 0){
+void GPS_loop(double &latGPS, double &lngGPS, double &altGPS){
+  while (gpsSerial.available() > 0){
     gps.encode(gpsSerial.read());
   }
   if(gps.location.isValid()){
     latGPS = gps.location.lat();
-    lonGPS = gps.location.lon();
+    lngGPS = gps.location.lng();
     altGPS = gps.altitude.meters();
   }
   else{
     //1.1 is the error confirmation
     latGPS = 1.1;
-    lonGPS = 1.1;
+    lngGPS = 1.1;
     altGPS = 1.1;
   }
 }
@@ -120,3 +146,7 @@ void Gyro_loop(float &ax_mps2, float &ay_mps2, float &az_mps2, float &gx_dps, fl
   tempF = (tempC * 9.0 / 5.0) + 32.0;
 
 }
+
+
+
+
