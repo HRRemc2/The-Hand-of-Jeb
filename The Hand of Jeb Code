@@ -149,4 +149,3 @@ void Gyro_loop(float &ax_mps2, float &ay_mps2, float &az_mps2, float &gx_dps, fl
 
 
 
-
