@@ -1,0 +1,42 @@
+#include <SPI.h>
+#include <SD.h>
+
+#define SD_CS 5
+
+int counter = 0;
+
+void setup() {
+  pinMode(2, OUTPUT);
+  Serial.begin(115200);
+  delay(1000);
+
+  if (!SD.begin(SD_CS)) {
+    Serial.println("SD initialization failed!");
+    while (true);
+  }
+
+  Serial.println("SD initialized.");
+}
+
+void loop() {
+  File dataFile = SD.open("/data.txt", FILE_APPEND);
+
+  if (dataFile) {
+    digitalWrite(2, HIGH);
+    dataFile.print("Count: ");
+    dataFile.println(counter);
+
+    dataFile.close();
+
+    Serial.print("Wrote: ");
+    Serial.println(counter);
+
+    counter++;
+  }
+  else {
+    digitalWrite(2, LOW);
+    Serial.println("Failed to open data.txt");
+  }
+
+  delay(1000);  // Wait 1 second
+}
