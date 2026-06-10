@@ -1,26 +1,43 @@
 /*
-The Hand of Jeb V0.2.0
+The Hand of Jeb V0.3.0
 
-Basic integration of flight computer components Part 1 of 2
-  -GPS
-  -Gyro
+
+Basic integration of flight computer components
+ -GPS
+ -Gyro
+ -SD Card
 
 */
 
+
 #include <TinyGPS++.h>
+
 
 #include <Wire.h>
 
+
+//sd card reader
+#include <SPI.h>
+#include <SD.h>
+
+
+#define SD_CS 5
+
+
+//gyro address i2c
 const int MPU_ADDR = 0x68;
+
 
 TinyGPSPlus gps;
 //GPS RX:16 TX:17 might be 17, 16
 HardwareSerial gpsSerial(1);
 
+
 //gps values
 double latGPS = 0.0;
 double lngGPS = 0.0;
 double altGPS = 0.0;
+
 
 //gyro values
 int16_t ax, ay, az;
@@ -32,120 +49,214 @@ float gx_dps, gy_dps, gz_dps;
 float tempC, tempF;
 
 
+unsigned long time_ms = millis();
+
+
 void setup() {
+  
 
   Serial.println("GPS Setup");
+
 
   Serial.begin(115200);
   gpsSerial.begin(9600, SERIAL_8N1, 16, 17);
 
+
   Serial.println("GPS Connected");
   Serial.println("Finding Satelites");
 
+
   Serial.println("Gyro Setup");
+
 
   Wire.begin(21, 22);
   Wire.setClock(100000);
 
+
   Serial.println("Waking MPU");
+
 
   Wire.beginTransmission(MPU_ADDR);
   Wire.write(0x6B);
   Wire.write(0x00);
   Wire.endTransmission();
 
+
   Serial.println("Gyro Connected");
+
+
+  Serial.println("SD Reader Setup");
+
+
+  pinMode(2, OUTPUT);
+
+  if (!SD.begin(SD_CS)) {
+    Serial.println("SD init failed");
+    while (true);
+  }
+
+ File file = SD.open("/data.csv", FILE_WRITE);
+  if (file) {
+   file.println("time_ms,latGPS,lngGPS,altGPS,ax_mps2,ay_mps2, az_mps2, gx_dps, gy_dps, gz_dps, tempC, tempF");
+   file.close();
+ }
+
+
+  Serial.println("SD Reader Initialized");
+
 
 }
 
+
 void loop() {
-  
+  time_ms = millis();
   GPS_loop(latGPS, lngGPS, altGPS);
   Gyro_loop(ax_mps2, ay_mps2, az_mps2, gx_dps, gy_dps, gz_dps, tempC, tempF);
 
-  Serial.println("GPS: ");
-  Serial.print(latGPS);
-  Serial.print(", ");
-  Serial.print(lngGPS);
-  Serial.print(", ");
-  Serial.print(altGPS);
 
-  Serial.println("Gyro: ");
-  Serial.print(ax_mps2);
-  Serial.print(", ");
-  Serial.print(ay_mps2);
-  Serial.print(", ");
-  Serial.print(az_mps2);
-  Serial.print(", ");
-  Serial.print(gx_dps);
-  Serial.print(", ");
-  Serial.print(gy_dps);
-  Serial.print(", ");
-  Serial.println(gz_dps);
-  Serial.print("Temp(C, F): ");
-  Serial.print(tempC);
-  Serial.print(", ");
-  Serial.print(tempF);
+  SerialPrint_loop();
+  SDwrite_loop();
+
+
+
+
+
+
+
 
 
 
 
 
 }
+
 
 void GPS_loop(double &latGPS, double &lngGPS, double &altGPS){
-  while (gpsSerial.available() > 0){
-    gps.encode(gpsSerial.read());
-  }
-  if(gps.location.isValid()){
-    latGPS = gps.location.lat();
-    lngGPS = gps.location.lng();
-    altGPS = gps.altitude.meters();
-  }
-  else{
-    //1.1 is the error confirmation
-    latGPS = 1.1;
-    lngGPS = 1.1;
-    altGPS = 1.1;
-  }
+ while (gpsSerial.available() > 0){
+   gps.encode(gpsSerial.read());
+ }
+ if(gps.location.isValid()){
+   latGPS = gps.location.lat();
+   lngGPS = gps.location.lng();
+   altGPS = gps.altitude.meters();
+ }
+ else{
+   //1.1 is the error confirmation
+   latGPS = 1.1;
+   lngGPS = 1.1;
+   altGPS = 1.1;
+ }
 }
+
 
 void Gyro_loop(float &ax_mps2, float &ay_mps2, float &az_mps2, float &gx_dps, float &gy_dps, float &gz_dps, float &tempC, float &tempF){
 
-  //read data
-  Wire.beginTransmission(MPU_ADDR);
-  Wire.write(0x3B);
-  Wire.endTransmission(false);
 
-  Wire.requestFrom(MPU_ADDR, 14);
+ //read data
+ Wire.beginTransmission(MPU_ADDR);
+ Wire.write(0x3B);
+ Wire.endTransmission(false);
 
-  ax = Wire.read() << 8 | Wire.read();
-  ay = Wire.read() << 8 | Wire.read();
-  az = Wire.read() << 8 | Wire.read();
 
-  tempRaw = Wire.read() << 8 | Wire.read();
+ Wire.requestFrom(MPU_ADDR, 14);
 
-  gx = Wire.read() << 8 | Wire.read();
-  gy = Wire.read() << 8 | Wire.read();
-  gz = Wire.read() << 8 | Wire.read();
 
-  //Conversions
+ ax = Wire.read() << 8 | Wire.read();
+ ay = Wire.read() << 8 | Wire.read();
+ az = Wire.read() << 8 | Wire.read();
 
-  //acceleration
-  ax_mps2 = ax / 16384.0 * 9.80665;
-  ay_mps2 = ay / 16384.0 * 9.80665;
-  az_mps2 = az / 16384.0 * 9.80665;
 
-  //gyro
-  gx_dps = gx / 131.0;
-  gy_dps = gy / 131.0;
-  gz_dps = gz / 131.0;
+ tempRaw = Wire.read() << 8 | Wire.read();
 
-  //temp
-  tempC = (tempRaw / 340.0) + 36.53;
-  tempF = (tempC * 9.0 / 5.0) + 32.0;
 
+ gx = Wire.read() << 8 | Wire.read();
+ gy = Wire.read() << 8 | Wire.read();
+ gz = Wire.read() << 8 | Wire.read();
+
+
+ //Conversions
+
+
+ //acceleration
+ ax_mps2 = ax / 16384.0 * 9.80665;
+ ay_mps2 = ay / 16384.0 * 9.80665;
+ az_mps2 = az / 16384.0 * 9.80665;
+
+
+ //gyro
+ gx_dps = gx / 131.0;
+ gy_dps = gy / 131.0;
+ gz_dps = gz / 131.0;
+
+
+ //temp
+ tempC = (tempRaw / 340.0) + 36.53;
+ tempF = (tempC * 9.0 / 5.0) + 32.0;
 }
+
+
+void SerialPrint_loop(){
+ Serial.println("GPS: ");
+ Serial.print(latGPS);
+ Serial.print(", ");
+ Serial.print(lngGPS);
+ Serial.print(", ");
+ Serial.print(altGPS);
+
+
+ Serial.println("Gyro: ");
+ Serial.print(ax_mps2);
+ Serial.print(", ");
+ Serial.print(ay_mps2);
+ Serial.print(", ");
+ Serial.print(az_mps2);
+ Serial.print(", ");
+ Serial.print(gx_dps);
+ Serial.print(", ");
+ Serial.print(gy_dps);
+ Serial.print(", ");
+ Serial.println(gz_dps);
+ Serial.print("Temp(C, F): ");
+ Serial.print(tempC);
+ Serial.print(", ");
+ Serial.print(tempF);
+}
+
+
+void SDwrite_loop(){
+ File file = SD.open("/data.csv", FILE_APPEND);
+ if (file){
+   file.print(time_ms);
+   file.print(","); 
+   file.print(latGPS, 6);
+   file.print(",");
+   file.print(lngGPS, 6);
+   file.print(",");
+   file.print(altGPS, 6);
+   file.print(",");
+   file.print(ax_mps2);
+   file.print(",");
+   file.print(ay_mps2);
+   file.print(",");
+   file.print(az_mps2);
+   file.print(",");
+   file.print(gx_dps);
+   file.print(",");
+   file.print(gy_dps);
+   file.print(",");
+   file.print(gz_dps);
+   file.print(",");
+   file.print(tempC);
+   file.print(",");
+   file.println(tempF);
+
+   file.close();
+ }
+}
+
+
+
+
 
 
 
