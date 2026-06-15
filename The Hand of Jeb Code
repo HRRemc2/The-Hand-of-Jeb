@@ -1,11 +1,12 @@
 /*
-The Hand of Jeb V0.3.0
+The Hand of Jeb V0.3.1
 
 
 Basic integration of flight computer components
  -GPS
  -Gyro
  -SD Card
+
 
 */
 
@@ -75,11 +76,20 @@ void setup() {
 
   Serial.println("Waking MPU");
 
-
   Wire.beginTransmission(MPU_ADDR);
   Wire.write(0x6B);
   Wire.write(0x00);
-  Wire.endTransmission();
+  Wire.endTransmission(true);
+  
+  Wire.beginTransmission(MPU_ADDR);
+  Wire.write(0x1B);
+  Wire.write(0x00);
+  Wire.endTransmission(true);
+
+  Wire.beginTransmission(MPU_ADDR);
+  Wire.write(0x1C);
+  Wire.write(0x00);
+  Wire.endTransmission(true);
 
 
   Serial.println("Gyro Connected");
@@ -92,10 +102,10 @@ void setup() {
 
   if (!SD.begin(SD_CS)) {
     Serial.println("SD init failed");
-    while (true);
   }
+  SD.remove("/data.csv");
 
- File file = SD.open("/data.csv", FILE_WRITE);
+  File file = SD.open("/data.csv", FILE_WRITE);
   if (file) {
    file.println("time_ms,latGPS,lngGPS,altGPS,ax_mps2,ay_mps2, az_mps2, gx_dps, gy_dps, gz_dps, tempC, tempF");
    file.close();
@@ -155,6 +165,8 @@ void Gyro_loop(float &ax_mps2, float &ay_mps2, float &az_mps2, float &gx_dps, fl
  //read data
  Wire.beginTransmission(MPU_ADDR);
  Wire.write(0x3B);
+
+
  Wire.endTransmission(false);
 
 
@@ -174,8 +186,15 @@ void Gyro_loop(float &ax_mps2, float &ay_mps2, float &az_mps2, float &gx_dps, fl
  gz = Wire.read() << 8 | Wire.read();
 
 
- //Conversions
-
+//error check
+ ax_mps2 = 1.1111;
+ ay_mps2 = 1.1111;
+ az_mps2 = 1.1111;
+ gx_dps = 1.1111;
+ gy_dps = 1.1111;
+ gz_dps = 1.1111;
+ tempC = 1.1111;
+ tempF = 1.1111;
 
  //acceleration
  ax_mps2 = ax / 16384.0 * 9.80665;
@@ -192,6 +211,8 @@ void Gyro_loop(float &ax_mps2, float &ay_mps2, float &az_mps2, float &gx_dps, fl
  //temp
  tempC = (tempRaw / 340.0) + 36.53;
  tempF = (tempC * 9.0 / 5.0) + 32.0;
+
+ 
 }
 
 
